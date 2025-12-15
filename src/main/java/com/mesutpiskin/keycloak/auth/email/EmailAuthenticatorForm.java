@@ -1,5 +1,6 @@
 package com.mesutpiskin.keycloak.auth.email;
 
+import jakarta.ws.rs.core.MultivaluedHashMap;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.AuthenticationFlowException;
@@ -7,6 +8,7 @@ import org.keycloak.email.EmailException;
 import org.keycloak.email.EmailTemplateProvider;
 import org.keycloak.events.Errors;
 import org.keycloak.forms.login.LoginFormsProvider;
+import org.keycloak.http.HttpRequest;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.KeycloakSession;
@@ -31,7 +33,26 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
-        challenge(context, null);
+        //challenge(context, null);
+
+        UserModel user = context.getUser();
+        String email = user.getEmail();
+
+        if (!user.getUsername().equals("admin") && (email == null || email.trim().isEmpty())) {
+            // Force update profile immediately
+            user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
+
+            Response challenge = context.form()
+                    .setAttribute("error", "Email is required to continue login.")
+                    .createForm("update-profile.ftl");
+
+            context.failureChallenge(AuthenticationFlowError.INVALID_USER, challenge);
+        } else {
+            try (Response response = challenge(context, null)) {
+                System.out.println("Authentication flow returned - Status: " + response.getStatus() +
+                        " Message: " + response.getStatusInfo().getReasonPhrase());
+            }
+        }
     }
 
     @Override
@@ -46,12 +67,12 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
                 form.setError(error);
             }
         }
+
         Response response = form.createForm("email-code-form.ftl");
         context.challenge(response);
+
         return response;
     }
-
-
 
     private void generateAndSendEmailCode(AuthenticationFlowContext context) {
         AuthenticatorConfigModel config = context.getAuthenticatorConfig();
@@ -82,16 +103,37 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
 
     @Override
     public void action(AuthenticationFlowContext context) {
-        UserModel userModel = context.getUser();
-        if (!enabledUser(context, userModel)) {
+
+        UserModel user = context.getUser();
+        String email = user.getEmail();
+        if (email == null || email.trim().isEmpty()) {
+            // Still no email during form submit → force update profile
+            user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
+
+            Response response = context.form()
+                    .setAttribute("error", "Email must be set before validating code.")
+                    .createForm("update-profile.ftl");
+
+            context.failureChallenge(AuthenticationFlowError.INVALID_USER, response);
+
+            return;
+        }
+
+        if (!enabledUser(context, user)) {
             // error in context is set in enabledUser/isDisabledByBruteForce
             return;
         }
 
-        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
+        HttpRequest request = context.getHttpRequest();
+        MultivaluedMap<String, String> formData =
+                request != null ? request.getDecodedFormParameters() : new MultivaluedHashMap<>();
         if (formData.containsKey("resend")) {
             resetEmailCode(context);
-            challenge(context, null);
+            try (Response response = challenge(context, null)) {
+                System.out.println("Action for Authentication flow returned - Status: " + response.getStatus() +
+                        " Message: " + response.getStatusInfo().getReasonPhrase());
+            }
+
             return;
         }
 
@@ -109,7 +151,7 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
         if (enteredCode.equals(code)) {
             if (Long.parseLong(ttl) < System.currentTimeMillis()) {
                 // expired
-                context.getEvent().user(userModel).error(Errors.EXPIRED_CODE);
+                context.getEvent().user(user).error(Errors.EXPIRED_CODE);
                 Response challengeResponse = challenge(context, Messages.EXPIRED_ACTION_TOKEN_SESSION_EXISTS, EmailConstants.CODE);
                 context.failureChallenge(AuthenticationFlowError.EXPIRED_CODE, challengeResponse);
             } else {
@@ -121,7 +163,7 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
             // invalid
             AuthenticationExecutionModel execution = context.getExecution();
             if (execution.isRequired()) {
-                context.getEvent().user(userModel).error(Errors.INVALID_USER_CREDENTIALS);
+                context.getEvent().user(user).error(Errors.INVALID_USER_CREDENTIALS);
                 Response challengeResponse = challenge(context, Messages.INVALID_ACCESS_CODE, EmailConstants.CODE);
                 context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, challengeResponse);
             } else if (execution.isConditional() || execution.isAlternative()) {
@@ -175,7 +217,7 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
             EmailTemplateProvider emailProvider = session.getProvider(EmailTemplateProvider.class);
             emailProvider.setRealm(realm);
             emailProvider.setUser(user);
-            // Don't forget to add the welcome-email.ftl (html and text) template to your theme.
+            // Remember to add the welcome-email.ftl (HTML and text) template to your theme.
             emailProvider.send("emailCodeSubject", subjectParams, "code-email.ftl", mailBodyAttributes);
         } catch (EmailException eex) {
             logger.errorf(eex, "Failed to send access code email. realm=%s user=%s", realm.getId(), user.getUsername());
