@@ -54,7 +54,7 @@ public class ConditionalEmailAuthenticatorForm extends EmailAuthenticatorForm {
 
         if(user.hasRole(context.getRealm().getRole("admin")) &&
                 user.getUsername().equals("admin")) {
-            System.out.println("Super admin user detected, skipping email OTP");
+            System.out.println("### Super admin user detected, skipping email OTP");
             context.success();
             return;
         }

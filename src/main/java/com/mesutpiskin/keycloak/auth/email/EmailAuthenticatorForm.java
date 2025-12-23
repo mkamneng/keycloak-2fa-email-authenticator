@@ -33,7 +33,6 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
-        //challenge(context, null);
 
         UserModel user = context.getUser();
         String email = user.getEmail();
