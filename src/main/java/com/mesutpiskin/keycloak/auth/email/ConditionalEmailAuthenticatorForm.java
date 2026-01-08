@@ -19,7 +19,6 @@ import org.keycloak.models.RoleModel;
 import org.keycloak.models.UserModel;
 
 import jakarta.ws.rs.core.MultivaluedMap;
-import jakarta.ws.rs.core.MultivaluedHashMap;
 
 public class ConditionalEmailAuthenticatorForm extends EmailAuthenticatorForm {
 
@@ -71,8 +70,7 @@ public class ConditionalEmailAuthenticatorForm extends EmailAuthenticatorForm {
             return;
         }
 
-        MultivaluedMap<String, String> requestHeaders = getRequestHeaders(context);
-        if (tryConcludeBasedOn(voteForHttpHeaderMatchesPattern(requestHeaders, config), context)) {
+        if (tryConcludeBasedOn(voteForHttpHeaderMatchesPattern(context.getHttpRequest().getHttpHeaders().getRequestHeaders(), config), context)) {
             return;
         }
 
@@ -211,22 +209,5 @@ public class ConditionalEmailAuthenticatorForm extends EmailAuthenticatorForm {
         }
 
         return false;
-    }
-
-    private MultivaluedMap<String, String> getRequestHeaders(AuthenticationFlowContext context) {
-
-        MultivaluedMap<String, String> multivaluedMap = new MultivaluedHashMap<>();
-
-        HttpRequest request = context.getHttpRequest();
-        if( request == null ) {
-            return multivaluedMap;
-        }
-
-        HttpHeaders headers = request.getHttpHeaders();
-        if( headers == null ) {
-            return multivaluedMap;
-        }
-
-        return headers.getRequestHeaders();
     }
 }

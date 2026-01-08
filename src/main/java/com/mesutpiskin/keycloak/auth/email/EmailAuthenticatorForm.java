@@ -34,24 +34,7 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
     @Override
     public void authenticate(AuthenticationFlowContext context) {
 
-        UserModel user = context.getUser();
-        String email = user.getEmail();
-
-        if (!user.getUsername().equals("admin") && (email == null || email.trim().isEmpty())) {
-            // Force update profile immediately
-            user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
-
-            Response challenge = context.form()
-                    .setAttribute("error", "Email is required to continue login.")
-                    .createForm("update-profile.ftl");
-
-            context.failureChallenge(AuthenticationFlowError.INVALID_USER, challenge);
-        } else {
-            try (Response response = challenge(context, null)) {
-                System.out.println("Authentication flow returned - Status: " + response.getStatus() +
-                        " Message: " + response.getStatusInfo().getReasonPhrase());
-            }
-        }
+        challenge(context, null);
     }
 
     @Override
@@ -104,35 +87,17 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator {
     public void action(AuthenticationFlowContext context) {
 
         UserModel user = context.getUser();
-        String email = user.getEmail();
-        if (email == null || email.trim().isEmpty()) {
-            // Still no email during form submit → force update profile
-            user.addRequiredAction(UserModel.RequiredAction.UPDATE_PROFILE);
-
-            Response response = context.form()
-                    .setAttribute("error", "Email must be set before validating code.")
-                    .createForm("update-profile.ftl");
-
-            context.failureChallenge(AuthenticationFlowError.INVALID_USER, response);
-
-            return;
-        }
+        // }
 
         if (!enabledUser(context, user)) {
             // error in context is set in enabledUser/isDisabledByBruteForce
             return;
         }
 
-        HttpRequest request = context.getHttpRequest();
-        MultivaluedMap<String, String> formData =
-                request != null ? request.getDecodedFormParameters() : new MultivaluedHashMap<>();
+        MultivaluedMap<String, String> formData = context.getHttpRequest().getDecodedFormParameters();
         if (formData.containsKey("resend")) {
             resetEmailCode(context);
-            try (Response response = challenge(context, null)) {
-                System.out.println("Action for Authentication flow returned - Status: " + response.getStatus() +
-                        " Message: " + response.getStatusInfo().getReasonPhrase());
-            }
-
+            challenge(context, null);
             return;
         }
 
