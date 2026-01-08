@@ -10,9 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-import jakarta.ws.rs.core.HttpHeaders;
 import org.keycloak.authentication.AuthenticationFlowContext;
-import org.keycloak.http.HttpRequest;
 import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.RoleModel;
